@@ -1,0 +1,37 @@
+version: 0.2
+env:
+  shell: bash
+  variables:
+    DOCKER_BUILDKIT: '1'
+    AWS_PAGER: ''
+  exported-variables:
+    - BUILD_URL
+
+phases:
+  install:
+    commands:
+      - aws --version
+      - echo AWS CLI update...
+      - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+      - unzip awscliv2.zip
+      - ./aws/install --bin-dir /root/.pyenv/shims --install-dir /usr/local/aws-cli --update
+      - aws --version
+      - echo Install Amazon Inspector SBOM Generator...
+      - curl -O https://amazon-inspector-sbomgen.s3.amazonaws.com/latest/linux/amd64/inspector-sbomgen.zip
+      - unzip inspector-sbomgen.zip
+      - mv inspector-sbomgen-* inspector-sbomgen-latest
+      - chmod +x inspector-sbomgen-latest/linux/amd64/inspector-sbomgen
+      - ./inspector-sbomgen-latest/linux/amd64/inspector-sbomgen --version
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+  build:
+    commands:
+      - ./inspector-sbomgen-latest/linux/amd64/inspector-sbomgen container --image $IMAGE_URL --outfile /tmp/sbom.json --quiet
+      # - aws inspector-scan scan-sbom --sbom file:///tmp/sbom.json --output-format INSPECTOR --query 'sbom.vulnerabilities'
+      # 重要度が critical または high の場合、出力する
+      - aws inspector-scan scan-sbom --sbom file:///tmp/sbom.json --output-format INSPECTOR --query 'sbom.vulnerabilities[?severity==`critical` || severity==`high`]'
+  post_build:
+    commands:
+      - export BUILD_URL=$CODEBUILD_BUILD_URL
