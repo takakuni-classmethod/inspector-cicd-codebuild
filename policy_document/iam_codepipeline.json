@@ -15,12 +15,15 @@
 		{
 			"Effect": "Allow",
 			"Action": [
-				"codecommit:GetBranch",
-				"codecommit:GetCommit",
-				"codecommit:UploadArchive",
-				"codecommit:GetUploadArchiveStatus",
-				"codecommit:CancelUploadArchive"
+				"logs:CreateLogGroup",
+				"logs:CreateLogStream",
+				"logs:PutLogEvents"
 			],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": ["codestar-connections:UseConnection"],
 			"Resource": "*"
 		},
 		{
@@ -37,7 +40,8 @@
 				"ecr:CompleteLayerUpload",
 				"ecr:PutImage",
 				"ecr:GetDownloadUrlForLayer",
-				"ecr:BatchCheckLayerAvailability"
+				"ecr:BatchCheckLayerAvailability",
+				"ecr:DescribeRepositories"
 			],
 			"Resource": "*"
 		},
@@ -58,6 +62,20 @@
 		{
 			"Effect": "Allow",
 			"Action": ["sts:GetServiceBearerToken"],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": "inspector-scan:ScanSbom",
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"ecr:GetDownloadUrlForLayer",
+				"ecr:BatchGetImage",
+				"ecr:BatchCheckLayerAvailability"
+			],
 			"Resource": "*"
 		}
 	]

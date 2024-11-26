@@ -1,36 +1,4 @@
 #################################################
-# IAM Role (EventBridge)
-#################################################
-resource "aws_iam_role" "eventbridge" {
-  name               = "${local.prefix}-eventbridge"
-  assume_role_policy = file("./policy_document/assume_eventbridge.json")
-}
-
-resource "aws_iam_policy" "eventbridge" {
-  name   = "${local.prefix}-eventbridge"
-  policy = file("./policy_document/iam_eventbridge.json")
-}
-
-resource "aws_iam_role_policy_attachment" "eventbridge" {
-  role       = aws_iam_role.eventbridge.name
-  policy_arn = aws_iam_policy.eventbridge.arn
-}
-
-resource "aws_cloudwatch_event_rule" "codepipeline" {
-  name = "${local.prefix}-codepipeline"
-
-  event_pattern = templatefile("./event_pattern/codepipeline.json", {
-    codecommit_arn = aws_codecommit_repository.main.arn
-  })
-}
-
-resource "aws_cloudwatch_event_target" "codepipeline" {
-  rule     = aws_cloudwatch_event_rule.codepipeline.name
-  arn      = aws_codepipeline.main.arn
-  role_arn = aws_iam_role.codepipeline.arn
-}
-
-#################################################
 # IAM Role
 #################################################
 resource "aws_iam_role" "codepipeline" {
@@ -90,6 +58,7 @@ resource "aws_codepipeline" "main" {
     action {
       name             = "Source"
       category         = "Source"
+      namespace        = "Source"
       owner            = "AWS"
       provider         = "CodeStarSourceConnection"
       version          = 1
@@ -115,36 +84,31 @@ resource "aws_codepipeline" "main" {
 
       configuration = {
         ECRRepositoryName = aws_ecr_repository.main.name
-        DockerFilePath    = "./codebuild/Dockerfile"
+        DockerFilePath    = "./docker"
+        ImageTags         = "#{Source.CommitId}"
       }
     }
   }
 
-  # stage {
-  #   name = "Scan"
-  #   action {
-  #     name             = "Scan"
-  #     category         = "Build"
-  #     namespace        = "Scan"
-  #     owner            = "AWS"
-  #     provider         = "CodeBuild"
-  #     version          = 1
-  #     input_artifacts  = ["source_output"]
-  #     output_artifacts = ["scan_output"]
+  stage {
+    name = "Scan"
+    action {
+      name             = "Scan"
+      category         = "Invoke"
+      namespace        = "Scan"
+      owner            = "AWS"
+      provider         = "InspectorScan"
+      version          = 1
+      input_artifacts  = []
+      output_artifacts = ["scan_output"]
 
-
-  #     configuration = {
-  #       ProjectName = aws_codebuild_project.image_scan.name
-  #       EnvironmentVariables = jsonencode([
-  #         {
-  #           name  = "IMAGE_URL"
-  #           value = "#{Build.IMAGE_URL}"
-  #           type  = "PLAINTEXT"
-  #         }
-  #       ])
-  #     }
-  #   }
-  # }
+      configuration = {
+        InspectorRunMode  = "ECRImageScan"
+        ECRRepositoryName = aws_ecr_repository.main.name
+        ImageTag          = "#{Source.CommitId}"
+      }
+    }
+  }
 
   stage {
     name = "Approval"
