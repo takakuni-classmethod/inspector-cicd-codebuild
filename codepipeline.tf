@@ -75,7 +75,8 @@ resource "aws_s3_bucket_public_access_block" "artifact" {
 # CodePipeline
 #################################################
 resource "aws_codepipeline" "main" {
-  name = "${local.prefix}-pipeline"
+  name          = "${local.prefix}-pipeline"
+  pipeline_type = "V2"
 
   role_arn = aws_iam_role.codepipeline.arn
 
@@ -90,14 +91,13 @@ resource "aws_codepipeline" "main" {
       name             = "Source"
       category         = "Source"
       owner            = "AWS"
-      provider         = "CodeCommit"
+      provider         = "CodeStarSourceConnection"
       version          = 1
       output_artifacts = ["source_output"]
       configuration = {
-        RepositoryName       = aws_codecommit_repository.main.repository_name
-        BranchName           = "main"
-        OutputArtifactFormat = "CODE_ZIP"
-        PollForSourceChanges = "false"
+        ConnectionArn    = var.connection_arn
+        FullRepositoryId = "takakuni-classmethod/inspector-cicd-codebuild" # 任意の値を入力
+        BranchName       = "v2"
       }
     }
   }
@@ -105,46 +105,46 @@ resource "aws_codepipeline" "main" {
   stage {
     name = "Build"
     action {
-      name             = "Build"
-      category         = "Build"
-      namespace        = "Build"
-      owner            = "AWS"
-      provider         = "CodeBuild"
-      version          = 1
-      input_artifacts  = ["source_output"]
-      output_artifacts = ["build_output"]
+      name            = "Build"
+      category        = "Build"
+      namespace       = "Build"
+      owner           = "AWS"
+      provider        = "ECRBuildAndPublish"
+      version         = 1
+      input_artifacts = ["source_output"]
 
       configuration = {
-        ProjectName = aws_codebuild_project.image_build.name
+        ECRRepositoryName = aws_ecr_repository.main.name
+        DockerFilePath    = "./codebuild/Dockerfile"
       }
     }
   }
 
-  stage {
-    name = "Scan"
-    action {
-      name             = "Scan"
-      category         = "Build"
-      namespace        = "Scan"
-      owner            = "AWS"
-      provider         = "CodeBuild"
-      version          = 1
-      input_artifacts  = ["source_output"]
-      output_artifacts = ["scan_output"]
-      
+  # stage {
+  #   name = "Scan"
+  #   action {
+  #     name             = "Scan"
+  #     category         = "Build"
+  #     namespace        = "Scan"
+  #     owner            = "AWS"
+  #     provider         = "CodeBuild"
+  #     version          = 1
+  #     input_artifacts  = ["source_output"]
+  #     output_artifacts = ["scan_output"]
 
-      configuration = {
-        ProjectName = aws_codebuild_project.image_scan.name
-        EnvironmentVariables = jsonencode([
-          {
-            name  = "IMAGE_URL"
-            value = "#{Build.IMAGE_URL}"
-            type  = "PLAINTEXT"
-          }
-        ])
-      }
-    }
-  }
+
+  #     configuration = {
+  #       ProjectName = aws_codebuild_project.image_scan.name
+  #       EnvironmentVariables = jsonencode([
+  #         {
+  #           name  = "IMAGE_URL"
+  #           value = "#{Build.IMAGE_URL}"
+  #           type  = "PLAINTEXT"
+  #         }
+  #       ])
+  #     }
+  #   }
+  # }
 
   stage {
     name = "Approval"
@@ -156,8 +156,8 @@ resource "aws_codepipeline" "main" {
       version  = 1
 
       configuration = {
-        CustomData         = "Container image scan result."
-        ExternalEntityLink = "#{Scan.BUILD_URL}"
+        CustomData = "Container image scan result."
+        # ExternalEntityLink = "#{Scan.BUILD_URL}"
       }
     }
   }
